@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Queueing Theory Master - 4 Models</title>
+    <style>
+        :root { --primary: #1e293b; --accent: #2563eb; --bg: #f8fafc; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); padding: 20px; color: #334155; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: var(--primary); margin-bottom: 25px; }
+        .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; background: #f1f5f9; padding: 20px; border-radius: 8px; }
+        .full { grid-column: span 2; }
+        label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.9rem; }
+        select, input { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
+        button { width: 100%; padding: 15px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1rem; transition: 0.2s; }
+        button:hover { background: #1d4ed8; }
+        .results { margin-top: 30px; display: none; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background: #f8fafc; color: #64748b; font-size: 0.8rem; text-transform: uppercase; }
+        .val { font-weight: bold; color: var(--accent); font-family: 'Courier New', Courier, monospace; font-size: 1.1rem; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Hệ thống Tính toán Hàng đợi Toàn diện</h2>
+    
+    <div class="config-grid">
+        <div class="full">
+            <label>Chọn mô hình hệ thống:</label>
+            <select id="model" onchange="toggleFields()">
+                <option value="mm1">M/M/1 (Đơn kênh, Phân phối mũ)</option>
+                <option value="mmc">M/M/c (Đa kênh, Phân phối mũ)</option>
+                <option value="mg1">M/G/1 (Đơn kênh, Phục vụ tùy ý)</option>
+                <option value="mgc">M/G/c (Đa kênh, Phục vụ tùy ý - Xấp xỉ)</option>
+            </select>
+        </div>
+
+        <div>
+            <label>Tốc độ khách đến (λ):</label>
+            <input type="number" id="lambda" step="any" placeholder="Ví dụ: 10">
+        </div>
+
+        <div>
+            <label>Tốc độ phục vụ (μ):</label>
+            <input type="number" id="mu" step="any" placeholder="Ví dụ: 12">
+        </div>
+
+        <div id="c_box" class="hidden">
+            <label>Số máy phục vụ (c):</label>
+            <input type="number" id="c_val" value="2" min="1">
+        </div>
+
+        <div id="sigma_box" class="hidden">
+            <label>Độ lệch chuẩn phục vụ (σ):</label>
+            <input type="number" id="sigma" value="0" step="any" placeholder="σ = 0 là M/D/c">
+        </div>
+    </div>
+
+    <button onclick="runCalculations()">Tính toán các đại lượng</button>
+
+    <div id="results" class="results">
+        <table>
+            <thead>
+                <tr><th>Ký hiệu</th><th>Giá trị</th><th>Mô tả chi tiết</th></tr>
+            </thead>
+            <tbody id="res-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function toggleFields() {
+    const m = document.getElementById('model').value;
+    document.getElementById('c_box').classList.toggle('hidden', m !== 'mmc' && m !== 'mgc');
+    document.getElementById('sigma_box').classList.toggle('hidden', m !== 'mg1' && m !== 'mgc');
+}
+
+function fact(n) { return n <= 1 ? 1 : n * fact(n - 1); }
+
+function runCalculations() {
+    const l = parseFloat(document.getElementById('lambda').value);
+    const m = parseFloat(document.getElementById('mu').value);
+    const model = document.getElementById('model').value;
+    const c = parseInt(document.getElementById('c_val').value) || 1;
+    const sigma = parseFloat(document.getElementById('sigma').value) || 0;
+
+    if (isNaN(l) || isNaN(m)) return alert("Vui lòng nhập λ và μ!");
+    
+    let L, Lq, Ls, W, Wq, Ws, P0, Pwait, rho_system;
+    Ws = 1 / m;
+    let r = l / m;
+    rho_system = r / c;
+
+    if (rho_system >= 1) return alert("Hệ thống không ổn định (λ ≥ cμ). Hàng đợi sẽ dài vô hạn!");
+
+    if (model === 'mm1') {
+        P0 = 1 - r;
+        Pwait = r;
+        L = r / (1 - r);
+        Lq = (r * r) / (1 - r);
+        W = 1 / (m - l);
+        Wq = l / (m * (m - l));
+    } 
+    else if (model === 'mmc') {
+        let sum = 0;
+        for (let n = 0; n < c; n++) sum += Math.pow(r, n) / fact(n);
+        sum += (Math.pow(r, c) / (fact(c) * (1 - rho_system)));
+        P0 = 1 / sum;
+        Pwait = (Math.pow(r, c) * P0) / (fact(c) * (1 - rho_system));
+        Lq = (Pwait * rho_system) / (1 - rho_system);
+        Wq = Lq / l;
+        W = Wq + Ws;
+        L = l * W;
+    }
+    else if (model === 'mg1') {
+        P0 = 1 - r;
+        Pwait = r;
+        // Công thức Pollaczek-Khinchine
+        Lq = (Math.pow(l, 2) * Math.pow(sigma, 2) + Math.pow(r, 2)) / (2 * (1 - r));
+        Wq = Lq / l;
+        W = Wq + Ws;
+        L = l * W;
+    }
+    else if (model === 'mgc') {
+        // Xấp xỉ Lee-Longton
+        let sum = 0;
+        for (let n = 0; n < c; n++) sum += Math.pow(r, n) / fact(n);
+        sum += (Math.pow(r, c) / (fact(c) * (1 - rho_system)));
+        let P0_mmc = 1 / sum;
+        let Pwait_mmc = (Math.pow(r, c) * P0_mmc) / (fact(c) * (1 - rho_system));
+        let Wq_mmc = (Pwait_mmc * rho_system) / (l * (1 - rho_system));
+        
+        let Cs = sigma * m; // Hệ số biến thiên
+        Wq = Wq_mmc * ((Math.pow(Cs, 2) + 1) / 2);
+        W = Wq + Ws;
+        Lq = l * Wq;
+        L = l * W;
+        P0 = P0_mmc; // Xấp xỉ
+        Pwait = Pwait_mmc; // Xấp xỉ
+    }
+
+    Ls = r; // Số khách đang được phục vụ trung bình (λ/μ)
+
+    const data = [
+        ["P0", P0, "Xác suất hệ thống rỗng (không có ai)"],
+        ["P > 0", Pwait, "Xác suất khách đến phải chờ"],
+        ["L", L, "Số lượng khách trung bình trong toàn hệ thống"],
+        ["Lq", Lq, "Số lượng khách trung bình đang đứng chờ"],
+        ["Ls", Ls, "Số lượng khách trung bình đang được phục vụ"],
+        ["W", W, "Tổng thời gian trung bình trong hệ thống"],
+        ["Wq", Wq, "Thời gian trung bình phải chờ trong hàng"],
+        ["Ws", Ws, "Thời gian phục vụ trung bình (1/μ)"]
+    ];
+
+    let html = '';
+    data.forEach(d => {
+        html += `<tr><td><b>${d[0]}</b></td><td class="val">${d[1].toFixed(5)}</td><td>${d[2]}</td></tr>`;
+    });
+    document.getElementById('res-body').innerHTML = html;
+    document.getElementById('results').style.display = 'block';
+}
+</script>
+
+</body>
+</html>
